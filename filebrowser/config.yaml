@@ -1,0 +1,24 @@
+http:
+  port: 80
+  disableWebDAV: true
+  trustProxyHeaders: false
+
+server:
+  cacheDir: /home/filebrowser/data/tmp
+  sources:
+    - path: /files
+      name: Netfiles
+      config:
+        defaultEnabled: true
+        useLogicalSize: true
+        rules:
+          - folderPath: "/"
+            ignoreSymlinks: true
+
+auth:
+  adminUsername: admin
+  methods:
+    password:
+      enabled: true
+      signup: false
+      minLength: 12

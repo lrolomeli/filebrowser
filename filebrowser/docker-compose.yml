@@ -1,0 +1,14 @@
+services:
+  filebrowser:
+    image: ghcr.io/gtsteffaniak/filebrowser:stable-slim
+    user: "${PUID:-1000}:${PGID:-1000}"
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    environment:
+      FILEBROWSER_CONFIG: /config/config.yaml
+      FILEBROWSER_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?define ADMIN_PASSWORD}
+    volumes:
+      - "${FILES_HOST_PATH:?define FILES_HOST_PATH}:/files"
+      - "./config.yaml:/config/config.yaml:ro"
+      - "./data:/home/filebrowser/data"
