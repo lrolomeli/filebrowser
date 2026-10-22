@@ -4,7 +4,7 @@ services:
     user: "${PUID:-1000}:${PGID:-1000}"
     restart: unless-stopped
     ports:
-      - "8085:80"
+      - "8087:80"
     environment:
       FILEBROWSER_CONFIG: /config/config.yaml
       FILEBROWSER_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?define ADMIN_PASSWORD}

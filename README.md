@@ -50,7 +50,8 @@ cp filebrowser/.env.example filebrowser/.env
 Edita `filebrowser/.env`:
 
 ```env
-FILES_HOST_PATH=/mnt/nas/netfiles
+FILES_HOST_PATH=/mnt/nas_netfiles
+FILES_REQUIRE_MOUNT=true
 ADMIN_PASSWORD=una_contraseña_larga_y_aleatoria
 PUID=1000
 PGID=1000
@@ -58,6 +59,9 @@ PGID=1000
 
 - `FILES_HOST_PATH`: ruta absoluta de la carpeta de archivos. No uses `/` ni
   `/var`.
+- `FILES_REQUIRE_MOUNT`: si es `true`, el deploy falla cuando
+  `FILES_HOST_PATH` no es un punto de montaje. Úsalo siempre con NAS/NFS para
+  evitar escribir en un directorio local vacío.
 - `ADMIN_PASSWORD`: contraseña inicial del usuario `admin`.
 - `PUID`/`PGID`: propietario efectivo dentro del contenedor. Deben coincidir
   con el propietario de `FILES_HOST_PATH` y de `filebrowser/data`.
@@ -65,6 +69,67 @@ PGID=1000
 Puedes ajustar el nombre de la instancia, el tamaño mínimo de contraseña y
 otras opciones en `filebrowser/config.yaml`. Los cambios de configuración
 requieren reiniciar el contenedor.
+
+## Montaje NFS (NAS)
+
+Si los archivos viven en un NAS, móntalo antes de desplegar. Ejemplo con el
+export `/volume1/net-drive-1`:
+
+```bash
+sudo mkdir -p /mnt/nas_netfiles
+sudo nano /etc/fstab
+```
+
+Añadir:
+
+```fstab
+192.168.100.220:/volume1/net-drive-1  /mnt/nas_netfiles  nfs  rw,soft,timeo=50,retrans=2,_netdev  0  0
+```
+
+No uses `nofail` en este montaje: si el NAS no responde, el arranque debe
+fallar o quedar pendiente en vez de dejar un directorio local vacío.
+
+Para que Docker espere al montaje, crear un drop-in de systemd:
+
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/netfiles.conf >/dev/null <<'EOF'
+[Unit]
+RequiresMountsFor=/mnt/nas_netfiles
+After=remote-fs.target
+EOF
+sudo systemctl daemon-reload
+```
+
+Montar y verificar:
+
+```bash
+sudo mount /mnt/nas_netfiles
+findmnt /mnt/nas_netfiles
+mountpoint -q /mnt/nas_netfiles && echo "montado"
+df -h /mnt/nas_netfiles
+stat -c '%u:%g %a %n' /mnt/nas_netfiles
+```
+
+El UID/GID que devuelve `stat` debe usarse como `PUID`/`PGID` en `.env`.
+Comprueba también que el usuario del contenedor puede escribir:
+
+```bash
+touch /mnt/nas_netfiles/.netfiles-test
+rm /mnt/nas_netfiles/.netfiles-test
+```
+
+Si montas la raíz del export, Netfiles verá todo su contenido y el admin podrá
+borrar cualquier archivo de ese disco. Si el export contiene datos ajenos,
+usa una subcarpeta dedicada y ajusta `FILES_HOST_PATH`.
+
+Tras un reinicio, verifica:
+
+```bash
+systemctl is-active mnt-nas_netfiles.mount
+findmnt /mnt/nas_netfiles
+docker compose -f filebrowser/docker-compose.yml --env-file filebrowser/.env ps
+```
 
 ## Arranque
 
@@ -81,7 +146,7 @@ docker compose -f filebrowser/docker-compose.yml --env-file filebrowser/.env up 
 Accede en:
 
 ```text
-http://IP_DEL_HOST:8085
+http://IP_DEL_HOST:8087
 ```
 
 El usuario es `admin` y la contraseña es la definida en `ADMIN_PASSWORD`.
@@ -110,7 +175,7 @@ dejar pasar `/public/` sin autenticación o los enlaces dejarán de funcionar.
 
 ## Acceso desde Internet
 
-La configuración incluida es para **LAN o VPN**. No expongas el puerto `8085`
+La configuración incluida es para **LAN o VPN**. No expongas el puerto `8087`
 directamente a Internet.
 
 Si necesitas acceso público, añade un reverse proxy con TLS (Caddy, Traefik o
@@ -171,6 +236,9 @@ actividad.
 
 - **No aparecen archivos:** revisa que `FILES_HOST_PATH` exista en el host y
   que el contenedor vea `/files`.
+- **El deploy falla con "no está montado":** el NAS no está montado en
+  `FILES_HOST_PATH`. Revisa `findmnt`, `/etc/fstab` y
+  `systemctl status mnt-nas_netfiles.mount`.
 - **Permiso denegado al subir/crear:** ajusta `PUID`/`PGID` y los permisos de
   la carpeta del NAS.
 - **Error 413 al subir:** hay un proxy delante con un límite de cuerpo

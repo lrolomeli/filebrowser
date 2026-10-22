@@ -41,6 +41,11 @@ set +a
 
 [ -n "${FILES_HOST_PATH:-}" ] || fail "FILES_HOST_PATH está vacío en $ENV_FILE"
 [ -d "${FILES_HOST_PATH}" ] || fail "FILES_HOST_PATH no existe o no es un directorio: $FILES_HOST_PATH"
+
+if [ "${FILES_REQUIRE_MOUNT:-false}" = "true" ]; then
+  mountpoint -q "$FILES_HOST_PATH" || fail "$FILES_HOST_PATH no está montado. Revisa /etc/fstab y systemctl status mnt-nas_netfiles.mount"
+fi
+
 [ -n "${ADMIN_PASSWORD:-}" ] || fail "ADMIN_PASSWORD está vacío en $ENV_FILE"
 
 if [ "$ADMIN_PASSWORD" = "change_me" ]; then
